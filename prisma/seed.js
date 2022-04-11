@@ -2,12 +2,48 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function seed() {
-    await createCustomer();
+    const customer= await createCustomer();
     const movies = await createMovies();
     const screens = await createScreens();
-    await createScreenings(screens, movies);
+    const screenings = await createScreenings(screens, movies);
+
+    createTicket(customer, screenings[0], 2)
 
     process.exit(0);
+}
+
+async function createTicket(customer, screening, numberSeats) {
+ console.log('creating ticket for customer:', customer)
+ console.log('creating ticket for screening:', screening)
+ console.log('creating ticket with number of seats:', numberSeats)
+
+ const seatsToBook = []
+ for(let i=0; i<numberSeats; i++){
+     seatsToBook.push({
+         id:screening.screen.seats[i]
+     })
+ }
+
+const createdTicket = prisma.ticket.create({
+    data: {
+        customer : {
+            connect: {
+                id: customer.id
+            }
+        },
+        screening: {
+            connect: {
+                id:screening.id
+            }
+        },
+        seats : {
+            connect : [
+
+            ]
+        }
+    }
+})
+
 }
 
 async function createCustomer() {
@@ -31,6 +67,7 @@ async function createCustomer() {
     return customer;
 }
 
+
 async function createMovies() {
     const rawMovies = [
         { title: 'The Matrix', runtimeMins: 120 },
@@ -51,14 +88,35 @@ async function createMovies() {
 
 async function createScreens() {
     const rawScreens = [
-        { number: 1 }, { number: 2 }
+        { number: 1, 
+        seats:{
+            create:[
+                {number:1},
+                {number:2},
+                {number:3}
+            ]
+
+        }
+    }, { number: 2,
+        seats:{
+            create:[
+                {number:1},
+                {number:2},
+                {number:1}
+            ]
+
+        }
+    }
     ];
 
     const screens = [];
 
     for (const rawScreen of rawScreens) {
         const screen = await prisma.screen.create({
-            data: rawScreen
+            data: rawScreen,
+            include:{
+                seats:true
+            }
         });
 
         console.log('Screen created', screen);
@@ -70,6 +128,7 @@ async function createScreens() {
 }
 
 async function createScreenings(screens, movies) {
+    const screenings = []
     const screeningDate = new Date();
 
     for (const screen of screens) {
@@ -89,12 +148,21 @@ async function createScreenings(screens, movies) {
                             id: screen.id
                         }
                     }
+                },
+                include:{
+                    screen:{
+                        include: {
+                            seats:true
+                        }
+                    }
                 }
             });
+            screenings.push(screening)
 
             console.log('Screening created', screening);
         }
     }
+    return screenings
 }
 
 seed()
